@@ -1,0 +1,2 @@
+1. Install Python from the Windows Store or from python.org/downloads/
+2. After python has installed, open the "scripts" folder and run main.py
