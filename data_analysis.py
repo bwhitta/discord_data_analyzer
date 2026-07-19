@@ -49,7 +49,7 @@ def configStyles():
     plt.rcParams["axes.prop_cycle"] = cycler("color", ["xkcd:green", "xkcd:orangish red", "xkcd:dark sky blue"])
     
     # Find the location of the font
-    rootFolder = os.path.dirname(os.path.dirname(__file__))
+    rootFolder = os.path.dirname(__file__)
     fontPath = f"{rootFolder}/resources/Poppins-Regular.ttf"
     # Add the font and set it as default
     fm.fontManager.addfont(fontPath)
@@ -57,13 +57,13 @@ def configStyles():
 def savePlot(name, rasterDpi=150):
     print(f"Saving plot '{name}'")
     # Save to the folder in two formats
-    rootFolder = os.path.dirname(os.path.dirname(__file__))
+    rootFolder = os.path.dirname(__file__)
     savePath = f"{rootFolder}/results"
     plt.savefig(f"{savePath}/{name}.svg", transparent=True, bbox_inches="tight")
     plt.savefig(f"{savePath}/{name}.png", dpi=rasterDpi, bbox_inches="tight")
     plt.close()
 def createResultsFolder():
-    rootFolder = os.path.dirname(os.path.dirname(__file__))
+    rootFolder = os.path.dirname(__file__)
     resultsFolderPath = f"{rootFolder}/results"
     if not os.path.exists(resultsFolderPath):
         os.mkdir(resultsFolderPath)
@@ -491,7 +491,7 @@ def wordRankings(words):
     top500 = mostUsedWords.head(500).to_string()
 
     # Find where to save the file 
-    rootFolder = os.path.dirname(os.path.dirname(__file__))
+    rootFolder = os.path.dirname(__file__)
     txtPath = f"{rootFolder}/results/most_used_words.txt"
 
     # Save as a txt file
@@ -567,7 +567,7 @@ def wordTrends(messageWords, tkWindow):
     chartProgressLabel.grid_forget()
 
 def openFileExplorer(processLabel):
-    rootFolder = os.path.dirname(os.path.dirname(__file__))
+    rootFolder = os.path.dirname(__file__)
     exportPath = f"{rootFolder}\\results"
     
     if (os.name in ['nt', 'ce']):
