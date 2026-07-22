@@ -17,6 +17,8 @@ import sys
 # Misc. libraries
 from cycler import cycler
 import collections
+# Importing this because without it matplotlib refuses to export .svg files
+import matplotlib.backends.backend_svg
 
 # Color palette for associating a color with each year. It's really sick that you can use the XKCD color name survey options here
 yearsPalette = cycler("color", ["red", "xkcd:pumpkin orange", "xkcd:goldenrod", "green", "blue", "xkcd:purpley pink", "xkcd:pink"])
@@ -72,8 +74,8 @@ def configStyles():
 def savePlot(name, resultsPath, rasterDpi=150):
     print(f"Saving plot '{name}'")
     # Save to the folder in two formats
-    plt.savefig(f"{resultsPath}/{name}.svg", transparent=True, bbox_inches="tight")
     plt.savefig(f"{resultsPath}/{name}.png", dpi=rasterDpi, bbox_inches="tight")
+    plt.savefig(f"{resultsPath}/{name}.svg", transparent=True, bbox_inches="tight")
     plt.close()
 def createResultsFolder(savePath):
     resultsFolderPath = f"{savePath}/results"
