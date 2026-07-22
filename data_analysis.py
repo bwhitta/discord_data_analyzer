@@ -1,5 +1,5 @@
 # User interfaces
-from tkinter import ttk
+from tkinter import ttk, filedialog
 # File management
 import os
 # Data analysis
@@ -12,32 +12,43 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import matplotlib.font_manager as fm
+# Used for detecting whether this is running via .exe or .py file
+import sys
 # Misc. libraries
 from cycler import cycler
 import collections
 
 # Color palette for associating a color with each year. It's really sick that you can use the XKCD color name survey options here
 yearsPalette = cycler("color", ["red", "xkcd:pumpkin orange", "xkcd:goldenrod", "green", "blue", "xkcd:purpley pink", "xkcd:pink"])
+savepath = ""
 
 def analyzeData(messages, tkWindow, processLabel):
     def updateLabel(processDesc):
         processLabel.config(text=f"Visualizing data ({processDesc})...")
 
-    # Create the results folder if it's missing (since a lot of places, including github, don't like empty folders)
-    createResultsFolder()
+    savePath = chooseSavePath()
+    
+    # Create the results folder at the selected location
+    resultsPath = createResultsFolder(savePath)
 
     # Set up fonts and default styles
     configStyles()
 
     # Start analyzing and plotting
-    messagesBasicInfo(messages, updateLabel)
-    plotLetters(messages, updateLabel)
-    plotMessageTimes(messages, updateLabel)
-    plotMessageLengths(messages, updateLabel)
-    plotWords(messages, tkWindow, updateLabel)
+    messagesBasicInfo(messages, updateLabel, resultsPath)
+    plotLetters(messages, updateLabel, resultsPath)
+    plotMessageTimes(messages, updateLabel, resultsPath)
+    plotMessageLengths(messages, updateLabel, resultsPath)
+    plotWords(messages, tkWindow, updateLabel, resultsPath)
     
     # Display results path (and open in file explorer if on windows)
-    openFileExplorer(processLabel)
+    openFileExplorer(processLabel, resultsPath)
+
+def chooseSavePath():
+    while True:
+        file_path = filedialog.askdirectory(title = "Select Save Location")
+        if file_path:
+            return file_path 
 
 def configStyles():
     # This makes it so MPL is set up to only write files (which is all this program does)
@@ -50,23 +61,25 @@ def configStyles():
     
     # Find the location of the font
     rootFolder = os.path.dirname(__file__)
-    fontPath = f"{rootFolder}/resources/Poppins-Regular.ttf"
+    # Find the font if running as .exe
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        rootFolder = sys._MEIPASS
+
+    fontPath = f"{rootFolder}/Poppins-Regular.ttf"
     # Add the font and set it as default
     fm.fontManager.addfont(fontPath)
     plt.rcParams["font.family"] = "Poppins"
-def savePlot(name, rasterDpi=150):
+def savePlot(name, resultsPath, rasterDpi=150):
     print(f"Saving plot '{name}'")
     # Save to the folder in two formats
-    rootFolder = os.path.dirname(__file__)
-    savePath = f"{rootFolder}/results"
-    plt.savefig(f"{savePath}/{name}.svg", transparent=True, bbox_inches="tight")
-    plt.savefig(f"{savePath}/{name}.png", dpi=rasterDpi, bbox_inches="tight")
+    plt.savefig(f"{resultsPath}/{name}.svg", transparent=True, bbox_inches="tight")
+    plt.savefig(f"{resultsPath}/{name}.png", dpi=rasterDpi, bbox_inches="tight")
     plt.close()
-def createResultsFolder():
-    rootFolder = os.path.dirname(__file__)
-    resultsFolderPath = f"{rootFolder}/results"
+def createResultsFolder(savePath):
+    resultsFolderPath = f"{savePath}/results"
     if not os.path.exists(resultsFolderPath):
         os.mkdir(resultsFolderPath)
+    return resultsFolderPath
 def useGreatestTimeUnit(minutes):
     if (minutes >= 60*24*365.25):
         return f"{round(minutes/(60*24*365.25), 1)} years"
@@ -77,7 +90,7 @@ def useGreatestTimeUnit(minutes):
     else:
         return f"{round(minutes)} minutes"
 
-def messagesBasicInfo(messages, updateLabel):
+def messagesBasicInfo(messages, updateLabel, resultsPath):
     updateLabel("message counts")
     fig, ax = plt.subplots()
     ax.set_axis_off()
@@ -105,13 +118,13 @@ def messagesBasicInfo(messages, updateLabel):
     info2 = f"{hasAttachment[True]} of those had attachments such as images or files, leaving {hasAttachment[False]} more without."
     ax.text(0, 0.95, f"{info1}\n\n{info2}", horizontalalignment="left", verticalalignment="top", wrap=True)
 
-    savePlot("messages_basic_info")
+    savePlot("messages_basic_info", resultsPath)
 
-def plotLetters(messages, updateLabel):
+def plotLetters(messages, updateLabel, resultsPath):
     # Get usage counts by character
     updateLabel("counting characters")
     characterCounts = countCharacters(messages)
-    charactersBasicInfo(characterCounts.sum())
+    charactersBasicInfo(characterCounts.sum(), resultsPath)
     
     # Filter to only letters
     updateLabel("filtering letters")
@@ -119,9 +132,9 @@ def plotLetters(messages, updateLabel):
     letterCounts = characterCounts[characterCounts.index.map(lambda f: f in letters)]
     letterCounts = letterCounts.sort_values(ascending=False)
         
-    plotLetterFreq(letterCounts)
+    plotLetterFreq(letterCounts, resultsPath)
     updateLabel("comparing letter frequencies")
-    compareLetterFreq(letterCounts)
+    compareLetterFreq(letterCounts, resultsPath)
 def countCharacters(messages):
     # Combine all message contents to one large string
     combinedMessages = str.join("", messages["Contents"].astype(str).tolist())
@@ -130,7 +143,7 @@ def countCharacters(messages):
     characterCounts = pd.Series(collections.Counter(combinedMessages.lower()))
     
     return characterCounts
-def charactersBasicInfo(numCharacters):
+def charactersBasicInfo(numCharacters, resultsPath):
     fig, ax = plt.subplots()
     ax.set_axis_off()
     
@@ -171,8 +184,8 @@ def charactersBasicInfo(numCharacters):
     
     ax.text(0, 0.95, f"{info1}\n\n{info2}", horizontalalignment="left", verticalalignment="top", wrap=True)
 
-    savePlot("characters_basic_info")
-def plotLetterFreq(letterCounts):    
+    savePlot("characters_basic_info", resultsPath)
+def plotLetterFreq(letterCounts, resultsPath):    
     # Temporarily change default plot size
     plt.rcParams["figure.figsize"] = (6.4, 6.4)
     
@@ -196,11 +209,11 @@ def plotLetterFreq(letterCounts):
     ax.set_title(f"Letters by frequency of use", loc="center")
 
     # Save and show
-    savePlot("letter_freq")
+    savePlot("letter_freq", resultsPath)
 
     # Reset to the default plot size
     plt.rcParams["figure.figsize"] = mpl.rcParamsDefault["figure.figsize"]
-def compareLetterFreq(letterCounts):
+def compareLetterFreq(letterCounts, resultsPath):
     # Get the percentage of total letters for each letter
     letterPcts = letterCounts.map(lambda f: f/letterCounts.sum())
 
@@ -237,21 +250,21 @@ def compareLetterFreq(letterCounts):
     ax.set_xlabel("Control data is from Cryptological Mathematics by Robert Edward Lewand", size=8)
 
     # Save and show
-    savePlot("letter_freq_2")
+    savePlot("letter_freq_2", resultsPath)
     
     # Reset to the default plot size
     plt.rcParams["figure.figsize"] = mpl.rcParamsDefault["figure.figsize"]
 
 hoursDesc = ["12am","1am","2am","3am","4am","5am","6am","7am","8am","9am","10am","11am","12pm","1pm","2pm","3pm","4pm","5pm","6pm","7pm","8pm","9pm","10pm","11pm"]
-def plotMessageTimes(messages, updateLabel):
+def plotMessageTimes(messages, updateLabel, resultsPath):
     # Use those formatted times for plotting
     updateLabel("messages by month")
-    messagesByMonth(messages)
+    messagesByMonth(messages, resultsPath)
     updateLabel("messages by hour")
-    messagesByHour(messages)
+    messagesByHour(messages, resultsPath)
     updateLabel("messages by hour annually")
-    messagesByHourAnnual(messages)
-def messagesByMonth(messages):
+    messagesByHourAnnual(messages, resultsPath)
+def messagesByMonth(messages, resultsPath):
     messagesMonthly = pd.crosstab(messages["Timestamp"].dt.year, messages["Timestamp"].dt.month)
 
     # Add rows for months that never had a message
@@ -278,8 +291,8 @@ def messagesByMonth(messages):
     # Title
     ax.set_title("Messages sent by month", loc="left")
 
-    savePlot("message_months")
-def messagesByHour(messages):
+    savePlot("message_months", resultsPath)
+def messagesByHour(messages, resultsPath):
     messagesByHour = messages["Timestamp"].dt.hour.value_counts().sort_index(ascending=False)
     
     # Add rows for months that never had a message
@@ -302,8 +315,8 @@ def messagesByHour(messages):
     ax.set_yticks([])
     ax.set_title(f"Messages sent by hour", loc="left")
 
-    savePlot("messages_clock")
-def messagesByHourAnnual(messages):
+    savePlot("messages_clock", resultsPath)
+def messagesByHourAnnual(messages, resultsPath):
     messageHoursByYear = pd.crosstab(messages["Timestamp"].dt.year, messages["Timestamp"].dt.hour)
     
     # Add rows for months that never had a message
@@ -334,16 +347,16 @@ def messagesByHourAnnual(messages):
         ax.set_title(f"Messages by hour for {year}", loc="left")
         plt.figtext(0.75,0.9,f"Total Messages:\n{messagesByHour.sum()}")
 
-        savePlot(f"messages_clock_{year}")
+        savePlot(f"messages_clock_{year}", resultsPath)
 
-def plotMessageLengths(messages, updateLabel):
+def plotMessageLengths(messages, updateLabel, resultsPath):
     updateLabel("message lengths by month")
-    messageLengthsByMonth(messages)
+    messageLengthsByMonth(messages, resultsPath)
     updateLabel("message lengths by hour")
-    messageLenthsByHour(messages)
+    messageLenthsByHour(messages, resultsPath)
     updateLabel("message lengths by hour annually")
-    messagesLengthsByHourAnnual(messages)
-def messageLengthsByMonth(messages):
+    messagesLengthsByHourAnnual(messages, resultsPath)
+def messageLengthsByMonth(messages, resultsPath):
     lengthsByMonth = pd.crosstab(messages["Timestamp"].dt.year, messages["Timestamp"].dt.month, values=messages["Contents"].str.len(), aggfunc="mean")
     lengthsByMonth = lengthsByMonth.fillna(0)
 
@@ -371,8 +384,8 @@ def messageLengthsByMonth(messages):
     # Title
     ax.set_title("Messages lengths by month", loc="left")
     
-    savePlot("message_months_lengths")
-def messageLenthsByHour(messages):
+    savePlot("message_months_lengths", resultsPath)
+def messageLenthsByHour(messages, resultsPath):
     messageLengths = pd.concat([messages, messages["Contents"].str.len().rename("message_len")], axis=1)
     lengthsByHour = messageLengths.groupby(messageLengths["Timestamp"].dt.hour)["message_len"].mean()
     
@@ -395,8 +408,8 @@ def messageLenthsByHour(messages):
     ax.set_xticks(theta, lengthsByHour.index, size=10, position=(0,-0.02))
     ax.set_title(f"Message lengths by hour", loc="left")
 
-    savePlot("message_lengths_clock")
-def messagesLengthsByHourAnnual(messages):
+    savePlot("message_lengths_clock", resultsPath)
+def messagesLengthsByHourAnnual(messages, resultsPath):
     lengthsHourlyByYear = pd.crosstab(messages["Timestamp"].dt.year, messages["Timestamp"].dt.hour, values=messages["Contents"].str.len(), aggfunc="mean")
     lengthsHourlyByYear = lengthsHourlyByYear.fillna(0)
 
@@ -427,9 +440,9 @@ def messagesLengthsByHourAnnual(messages):
         # Title
         ax.set_title(f"Message lengths by hour for {year}", loc="left")
 
-        savePlot(f"message_lengths_clock_{year}")
+        savePlot(f"message_lengths_clock_{year}", resultsPath)
 
-def plotWords(messageTimesSplit, tkWindow, updateLabel):
+def plotWords(messageTimesSplit, tkWindow, updateLabel, resultsPath):
     updateLabel("counting words")
 
     # Split via definition of "word" as any letters and apostrophes, and any dashes that are "sandwiched" between other letters
@@ -446,12 +459,12 @@ def plotWords(messageTimesSplit, tkWindow, updateLabel):
     messageWords = pd.merge(words.rename("word"), messageTimesSplit, left_index=True, right_index=True)
     
     # Start visualizing this
-    wordsBasicInfo(mostUsedWords["Count"].sum())
+    wordsBasicInfo(mostUsedWords["Count"].sum(), resultsPath)
     updateLabel("most used words")
-    wordRankings(words)
+    wordRankings(words, resultsPath)
     updateLabel("word trends")
-    wordTrends(messageWords, tkWindow)
-def wordsBasicInfo(totalWords):
+    wordTrends(messageWords, tkWindow, resultsPath)
+def wordsBasicInfo(totalWords, resultsPath):
     fig, ax = plt.subplots()
     ax.set_axis_off()
 
@@ -482,8 +495,8 @@ def wordsBasicInfo(totalWords):
     info2 = f"Based on the assumption that a non-double-sided page can fit 250 words, a printed copy of your messages would weigh {pounds} pounds."
     ax.text(0, 0.95, f"{info1}\n\n{info2}", horizontalalignment="left", verticalalignment="top", wrap=True)
     
-    savePlot("messages_basic_info")
-def wordRankings(words):
+    savePlot("messages_basic_info", resultsPath)
+def wordRankings(words, resultsPath):
     # Get the rankings and usage count of words
     mostUsedWords = words.value_counts().sort_values(ascending=False)
     mostUsedWords = pd.concat([mostUsedWords.rename("Count"), mostUsedWords.rank(method="min", ascending=False).rename("Rank").astype(int)], axis=1)
@@ -491,15 +504,14 @@ def wordRankings(words):
     top500 = mostUsedWords.head(500).to_string()
 
     # Find where to save the file 
-    rootFolder = os.path.dirname(__file__)
-    txtPath = f"{rootFolder}/results/most_used_words.txt"
-
+    txtPath = f"{resultsPath}/most_used_words.txt"
+    
     # Save as a txt file
     output_file = open(txtPath, "w")
     output_file.write(top500)
     output_file.close()
     
-def wordTrends(messageWords, tkWindow):
+def wordTrends(messageWords, tkWindow, resultsPath):
     # Get rid of the index of MessageWords so that it can be crosstabbed
     words = messageWords.reset_index()
 
@@ -560,18 +572,15 @@ def wordTrends(messageWords, tkWindow):
         # Save the charts
         print("Saving plot")
         fig.tight_layout()
-        savePlot(f"messages_top_{startIndex+25}", 75)
+        savePlot(f"messages_top_{startIndex+25}", resultsPath, 75)
     
     # Remove the progress bar
     chartProgress.grid_forget()
     chartProgressLabel.grid_forget()
 
-def openFileExplorer(processLabel):
-    rootFolder = os.path.dirname(__file__)
-    exportPath = f"{rootFolder}\\results"
-    
+def openFileExplorer(processLabel, resultsPath):
     if (os.name in ['nt', 'ce']):
         print("Opening file explorer")
-        os.startfile(os.path.normpath(exportPath))
+        os.startfile(os.path.normpath(resultsPath))
     
-    processLabel.config(text=f"Data analysis finished! You can view your results at {exportPath}.")
+    processLabel.config(text=f"Data analysis finished! You can view your results at {resultsPath}.")

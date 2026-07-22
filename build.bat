@@ -3,7 +3,10 @@ py -m PyInstaller ^
 --onefile ^
 --clean ^
 --noupx ^
---workpath .\pyinstaller\build ^
---distpath .\pyinstaller\dist ^
---specpath .\pyinstaller ^
+--workpath .\pyinstaller ^
+--distpath "." ^
+--add-data "Poppins-Regular.ttf:." ^
+--add-data "OFL.txt:." ^
 "%~dp0main.py"
+
+pause

@@ -49,11 +49,11 @@ def processingThread(filepath, tkWindow, userTimezone):
     print("Starting processing thread")
     
     # If anything else in the program throws an error then it will be displayed as a tkinter popup before exiting.
-    try: 
-        processingData(filepath, tkWindow, userTimezone)
-    except Exception as error:
-        tk.messagebox.showerror("An error occurred!", f"Error: {error}")
-        tkWindow.quit()
+    #try: 
+    processingData(filepath, tkWindow, userTimezone)
+    #except Exception as error:
+    #    tk.messagebox.showerror("An error occurred!", f"Error: {error}")
+    #    tkWindow.quit()
 
 def processingData(filepath, tkWindow, userTimezone):
     # Extract the zip file and put the z into a dataframe
