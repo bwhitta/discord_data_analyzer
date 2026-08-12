@@ -425,7 +425,6 @@ def messagesLengthsByHourAnnual(messages, resultsPath):
     yearsUsed = messages["Timestamp"].dt.year.unique()
     for year, yearColor in zip(yearsUsed, yearsPalette):
         lengthsHourlyForYear = lengthsHourlyByYear.loc[year]
-        print(f"lenthsHourlyForYear:\n{lengthsHourlyForYear}")
 
         # Calculate numbers for polar histogram
         theta = np.linspace(0.0, 2 * np.pi, len(lengthsHourlyForYear), endpoint=False)

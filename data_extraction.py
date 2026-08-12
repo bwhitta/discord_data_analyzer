@@ -4,70 +4,63 @@ from tkinter import ttk
 import os
 import zipfile
 import tempfile
+import json
 # Data analysis
 import pandas as pd
 import numpy as np
 
 def extractFile(filepath, tkWindow, processLabel):
-    print("Starting file extraction")
-    fileZipped = zipfile.ZipFile(filepath)
-    
-    # Show a looping loading bar
-    readProgress = ttk.Progressbar(tkWindow, length=300, mode="indeterminate")
+    processLabel.config(text="Extracting data...")
+    # Show progress bar using Tkinter
+    readProgress = ttk.Progressbar(tkWindow, length=300)
     readProgress.grid()
-    readProgress.start()
-
-    processLabel.config(text="Extracting file...")
-    with tempfile.TemporaryDirectory() as tempDirectory:
-        # Extract the file
-        fileZipped.extractall(tempDirectory)
-        
-        # Hide the loading bar
-        readProgress.grid_forget()
-
-        # Turn the message files into a pandas dataframe
-        dataFolderName = os.path.splitext(os.path.basename(filepath))[0]
-        messages = extractMessages(f"{tempDirectory}/{dataFolderName}", tkWindow, processLabel)
+    readProgressLabel = ttk.Label(tkWindow, text="Starting processing channels")
+    readProgressLabel.grid()
     
-    print("Extracting file completed")
-    return messages
+    messageDfs = {}
+    channelNames = None
+    with zipfile.ZipFile(filepath) as zippedFolder:
+        # Iterate through files in the zipped folder
+        i = 0
+        totalMessages = len(zippedFolder.namelist())
+        for pathName in zippedFolder.namelist():
+            # Find messages.json files and the index.json file
+            if (pathName.startswith("Messages") and pathName.endswith("messages.json")):
+                # This selector gets rid of Messages/ and .messages.json to just get the channel ID
+                channelId = pathName[10:-14]
+                # Turn the JSON into a dataframe, then put it in the messageDfs dictionary
+                messageJson = json.loads(zippedFolder.read(pathName).decode("utf-8"))
+                messageDfs[channelId] = pd.DataFrame(messageJson)
+            elif (pathName == "Messages/index.json"):
+                # Make a series from the index.json file so that we know channel names
+                channelNamesJson = json.loads(zippedFolder.read(pathName).decode("utf-8"))
+                channelNames = pd.Series(channelNamesJson)
+            
+            # Update progress bar
+            readProgressLabel.config(text=f"Processed file {i} of {totalMessages} in zip")
+            pctProgress = i/totalMessages
+            readProgress["value"]=pctProgress*100
+            i += 1
 
-def extractMessages(rootPath, tkWindow, processLabel):
-    messagesPath = f"{rootPath}/Messages"
-
-    # Loop through everything in the "messages" folder
-    processLabel.config(text="Gathering channel info...")
-    messagesJsonFiles = {}
-    channelNamesJson = ""
-    for channel in os.listdir(messagesPath):
-        filePath = f"{messagesPath}/{channel}"
-        # If it's a folder, add the filepath of the location inside to messagesJsonFiles. Otherwise, it must be the channel names JSON and so that filepath is saved
-        if os.path.isdir(filePath):
-            messagesJsonFiles[channel] = f"{filePath}/messages.json"
-        else:
-            channelNamesJson = filePath
+    # Hide progress bar
+    readProgress.grid_forget()
+    readProgressLabel.grid_forget()
     
-    # Create a dataframe that associates channel IDs with their name
-    channelNames = pd.read_json(f"{channelNamesJson}", orient="index")
-    channelNames.index = channelNames.index.astype(int).astype(str)
-    
-    # Turn all of the jsons into pandas dataframes
-    messageDfs = readMessageJsons(messagesJsonFiles, tkWindow, processLabel)
-    
-    # Combine all of the channel dataframes into one big df
     namelessAllMessages = pd.concat(messageDfs, names=["channel_id", "num"])
-    
-    # Use the data taken from index.json earlier to figure out channel names
-    messages = namelessAllMessages.join(channelNames, on="channel_id", how="left")
-    messages = messages.rename(columns={0: "channel_name"})
-    
+
+    messages = namelessAllMessages.join(channelNames.rename("channel_name"), on="channel_id", how="left")
+
     # Make sure the ID doesn't use scientific notation
     messages["ID"] = messages["ID"].astype(int).astype(str)
 
     # Replace blank values in Attachments with NaN
     messages["Attachments"] = messages["Attachments"].replace("", np.nan)
 
+    messages["Timestamp"] = pd.to_datetime(messages["Timestamp"])
+
+    print(type(messages["Timestamp"]["1365148369080684625"][0]))
     return messages
+
 
 def readMessageJsons(messageJsons, tkWindow, processLabel):
     # Show UI for number of files read
