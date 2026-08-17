@@ -1,17 +1,19 @@
 # User interfaces
 from tkinter import ttk
-# File management
-import os
-import zipfile
-import tempfile
-import json
 # Data analysis
 import pandas as pd
 import numpy as np
+# Time zone management library
+import pytz
+# File management
+import zipfile
+import json
 
-def extractFile(filepath, tkWindow, processLabel):
+def extractFile(filepath, tkWindow, processLabel, userTimezone, logger):
     processLabel.config(text="Extracting data...")
+
     # Show progress bar using Tkinter
+    logger.info("Showing progress bar for extracting file")
     readProgress = ttk.Progressbar(tkWindow, length=300)
     readProgress.grid()
     readProgressLabel = ttk.Label(tkWindow, text="Starting processing channels")
@@ -19,10 +21,11 @@ def extractFile(filepath, tkWindow, processLabel):
     
     messageDfs = {}
     channelNames = None
+    logger.info(f"Opening zip file at {filepath} as context manager")
     with zipfile.ZipFile(filepath) as zippedFolder:
         # Iterate through files in the zipped folder
+        totalFilepaths = len(zippedFolder.namelist())
         i = 0
-        totalMessages = len(zippedFolder.namelist())
         for pathName in zippedFolder.namelist():
             # Find messages.json files and the index.json file
             if (pathName.startswith("Messages") and pathName.endswith("messages.json")):
@@ -37,59 +40,37 @@ def extractFile(filepath, tkWindow, processLabel):
                 channelNames = pd.Series(channelNamesJson)
             
             # Update progress bar
-            readProgressLabel.config(text=f"Processed file {i} of {totalMessages} in zip")
-            pctProgress = i/totalMessages
+            readProgressLabel.config(text=f"Processed file {i} of {totalFilepaths} in zip")
+            pctProgress = i/totalFilepaths
             readProgress["value"]=pctProgress*100
             i += 1
+    logger.info(f"Finished finding finding message files. Number of message dataframes: {len(messageDfs)}")
 
     # Hide progress bar
     readProgress.grid_forget()
     readProgressLabel.grid_forget()
     
     namelessAllMessages = pd.concat(messageDfs, names=["channel_id", "num"])
+    logger.info("concatenated messages")
+    logger.info(f"Concatenated message dataframes (length {len(namelessAllMessages)})")
 
     messages = namelessAllMessages.join(channelNames.rename("channel_name"), on="channel_id", how="left")
+    logger.info(f"Joined channel names to messages (length {len(messages)})")
 
     # Make sure the ID doesn't use scientific notation
     messages["ID"] = messages["ID"].astype(int).astype(str)
+    logger.info(f"Fixed message ID formatting")
 
     # Replace blank values in Attachments with NaN
     messages["Attachments"] = messages["Attachments"].replace("", np.nan)
+    logger.info(f"Replaced blank attachments with NaN")
 
+    # Format the timestamp
     messages["Timestamp"] = pd.to_datetime(messages["Timestamp"])
-
-    print(type(messages["Timestamp"]["1365148369080684625"][0]))
-    return messages
-
-
-def readMessageJsons(messageJsons, tkWindow, processLabel):
-    # Show UI for number of files read
-    readProgress = ttk.Progressbar(tkWindow, length=300)
-    readProgress.grid()
-    readProgressLabel = ttk.Label(tkWindow, text="Starting processing channels")
-    readProgressLabel.grid()
-
-    # Read the messages JSON files
-    print("Reading data")
-    processLabel.config(text="Gathering channel info...")
-    totalMessages = len(messageJsons)
-    messageDfs = {}
-    i = 0
-    for channelFolder, filePath in messageJsons.items():
-        # Remove the leading "c" from the folder name to get the channel's ID
-        channelId = channelFolder[1:]
-
-        # Turn the JSON into a pandas dataframe
-        messageDfs[channelId] = pd.read_json(filePath)
-
-        # Update UI
-        i += 1
-        readProgressLabel.config(text=f"Processed channel {i} of {totalMessages} (ID {channelId})")
-        pctProgress = i/totalMessages
-        readProgress["value"]=pctProgress*100
+    # Change it from un-localized time zone to UTC
+    messages["Timestamp"] = messages["Timestamp"].apply(pytz.utc.localize)
+    # Convert from UTC to the selected time zone
+    messages["Timestamp"] = messages["Timestamp"].apply(lambda f: f.astimezone(userTimezone))
+    logger.info(f"Formatted timestamp as datetime and applied time zone")
     
-    # Hide UI
-    readProgress.grid_forget()
-    readProgressLabel.grid_forget()
-
-    return messageDfs
+    return messages

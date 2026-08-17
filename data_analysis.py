@@ -24,35 +24,25 @@ import matplotlib.backends.backend_svg
 yearsPalette = cycler("color", ["red", "xkcd:pumpkin orange", "xkcd:goldenrod", "green", "blue", "xkcd:purpley pink", "xkcd:pink"])
 savepath = ""
 
-def analyzeData(messages, tkWindow, processLabel):
+def analyzeData(messages, tkWindow, processLabel, resultsPath, logger):
     def updateLabel(processDesc):
         processLabel.config(text=f"Visualizing data ({processDesc})...")
 
-    savePath = chooseSavePath()
-    
-    # Create the results folder at the selected location
-    resultsPath = createResultsFolder(savePath)
-
     # Set up fonts and default styles
-    configStyles()
+    configStyles(logger)
 
     # Start analyzing and plotting
-    messagesBasicInfo(messages, updateLabel, resultsPath)
-    plotLetters(messages, updateLabel, resultsPath)
-    plotMessageTimes(messages, updateLabel, resultsPath)
-    plotMessageLengths(messages, updateLabel, resultsPath)
-    plotWords(messages, tkWindow, updateLabel, resultsPath)
+    messagesBasicInfo(messages, updateLabel, resultsPath, logger)
+    plotLetters(messages, updateLabel, resultsPath, logger)
+    plotMessageTimes(messages, updateLabel, resultsPath, logger)
+    plotMessageLengths(messages, updateLabel, resultsPath, logger)
+    plotWords(messages, tkWindow, updateLabel, resultsPath, logger)
     
     # Display results path (and open in file explorer if on windows)
-    openFileExplorer(processLabel, resultsPath)
+    openFileExplorer(processLabel, resultsPath, logger)
 
-def chooseSavePath():
-    while True:
-        file_path = filedialog.askdirectory(title = "Select Save Location")
-        if file_path:
-            return file_path 
-
-def configStyles():
+def configStyles(logger):
+    logger.info(f"Setting up styles for MatPlotLib")
     # This makes it so MPL is set up to only write files (which is all this program does)
     # If not configured like this it gets mad that it's not run on the main thread
     mpl.use('agg')
@@ -62,6 +52,7 @@ def configStyles():
     plt.rcParams["axes.prop_cycle"] = cycler("color", ["xkcd:green", "xkcd:orangish red", "xkcd:dark sky blue"])
     
     # Find the location of the font
+    logger.info(f"Finding and setting font")
     rootFolder = os.path.dirname(__file__)
     # Find the font if running as .exe
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -71,17 +62,12 @@ def configStyles():
     # Add the font and set it as default
     fm.fontManager.addfont(fontPath)
     plt.rcParams["font.family"] = "Poppins"
-def savePlot(name, resultsPath, rasterDpi=150):
-    print(f"Saving plot '{name}'")
+def savePlot(name, resultsPath, logger, rasterDpi=150):
+    logger.info(f"Saving plot '{name}'")
     # Save to the folder in two formats
     plt.savefig(f"{resultsPath}/{name}.png", dpi=rasterDpi, bbox_inches="tight")
     plt.savefig(f"{resultsPath}/{name}.svg", transparent=True, bbox_inches="tight")
     plt.close()
-def createResultsFolder(savePath):
-    resultsFolderPath = f"{savePath}/results"
-    if not os.path.exists(resultsFolderPath):
-        os.mkdir(resultsFolderPath)
-    return resultsFolderPath
 def useGreatestTimeUnit(minutes):
     if (minutes >= 60*24*365.25):
         return f"{round(minutes/(60*24*365.25), 1)} years"
@@ -92,8 +78,9 @@ def useGreatestTimeUnit(minutes):
     else:
         return f"{round(minutes)} minutes"
 
-def messagesBasicInfo(messages, updateLabel, resultsPath):
+def messagesBasicInfo(messages, updateLabel, resultsPath, logger):
     updateLabel("message counts")
+    logger.info(f"Calculating message counts")
     fig, ax = plt.subplots()
     ax.set_axis_off()
 
@@ -120,23 +107,26 @@ def messagesBasicInfo(messages, updateLabel, resultsPath):
     info2 = f"{hasAttachment[True]} of those had attachments such as images or files, leaving {hasAttachment[False]} more without."
     ax.text(0, 0.95, f"{info1}\n\n{info2}", horizontalalignment="left", verticalalignment="top", wrap=True)
 
-    savePlot("messages_basic_info", resultsPath)
+    savePlot("messages_basic_info", resultsPath, logger)
 
-def plotLetters(messages, updateLabel, resultsPath):
+def plotLetters(messages, updateLabel, resultsPath, logger):
+
     # Get usage counts by character
+    logger.info(f"Calculating character counts")
     updateLabel("counting characters")
     characterCounts = countCharacters(messages)
-    charactersBasicInfo(characterCounts.sum(), resultsPath)
+    charactersBasicInfo(characterCounts.sum(), resultsPath, logger)
     
     # Filter to only letters
+    logger.info(f"Filtering characters to only letters")
     updateLabel("filtering letters")
     letters = "abcdefghijklmnopqrstuvwxyz"
     letterCounts = characterCounts[characterCounts.index.map(lambda f: f in letters)]
     letterCounts = letterCounts.sort_values(ascending=False)
-        
-    plotLetterFreq(letterCounts, resultsPath)
+    
+    plotLetterFreq(letterCounts, resultsPath, logger)
     updateLabel("comparing letter frequencies")
-    compareLetterFreq(letterCounts, resultsPath)
+    compareLetterFreq(letterCounts, resultsPath, logger)
 def countCharacters(messages):
     # Combine all message contents to one large string
     combinedMessages = str.join("", messages["Contents"].astype(str).tolist())
@@ -145,7 +135,9 @@ def countCharacters(messages):
     characterCounts = pd.Series(collections.Counter(combinedMessages.lower()))
     
     return characterCounts
-def charactersBasicInfo(numCharacters, resultsPath):
+def charactersBasicInfo(numCharacters, resultsPath, logger):
+    logger.info(f"Displaying character basic info")
+
     fig, ax = plt.subplots()
     ax.set_axis_off()
     
@@ -186,8 +178,9 @@ def charactersBasicInfo(numCharacters, resultsPath):
     
     ax.text(0, 0.95, f"{info1}\n\n{info2}", horizontalalignment="left", verticalalignment="top", wrap=True)
 
-    savePlot("characters_basic_info", resultsPath)
-def plotLetterFreq(letterCounts, resultsPath):    
+    savePlot("characters_basic_info", resultsPath, logger)
+def plotLetterFreq(letterCounts, resultsPath, logger):
+    logger.info(f"Plotting letter frequency")
     # Temporarily change default plot size
     plt.rcParams["figure.figsize"] = (6.4, 6.4)
     
@@ -211,17 +204,19 @@ def plotLetterFreq(letterCounts, resultsPath):
     ax.set_title(f"Letters by frequency of use", loc="center")
 
     # Save and show
-    savePlot("letter_freq", resultsPath)
+    savePlot("letter_freq", resultsPath, logger)
 
     # Reset to the default plot size
     plt.rcParams["figure.figsize"] = mpl.rcParamsDefault["figure.figsize"]
-def compareLetterFreq(letterCounts, resultsPath):
+def compareLetterFreq(letterCounts, resultsPath, logger):
+    logger.info(f"Plotting letter frequency comparison")
+    
     # Get the percentage of total letters for each letter
     letterPcts = letterCounts.map(lambda f: f/letterCounts.sum())
 
     # Letter frequency data for comparison
     # Data source: https://books.google.com/books?id=CyCcRAm7eQMC&pg=PA36#v=onepage&q&f=false
-    controlLetters = {"a":0.0820,"b":0.0150,"c":0.0280,"d":0.0430,"e":0.1270,"f":0.0220,"g":0.0200,"h":0.0610,"i":0.0700,"j":0.0016,"k":0.0077,"l":0.0400,"m":0.0240,"n":0.0670,"o":0.0750,"p":0.0190,"q":0.0012,"r":0.0600,"s":0.0630,"t":0.0910,"u":0.0280,"v":0.0098,"w":0.0240,"x":0.0015,"y":0.0200,"z":0.0007}
+    controlLetters = {"a":0.08167, "b":0.01492, "c":0.02782, "d":0.04253, "e":0.12702, "f":0.02228, "g":0.02015, "h":0.06094, "i":0.06966, "j":0.00153, "k":0.00772, "l":0.04025, "m":0.02406, "n":0.06749, "o":0.07507, "p":0.01929, "q":0.00095, "r":0.05987, "s":0.06327, "t":0.09056, "u":0.02758, "v":0.00978, "w":0.02360, "x":0.00150, "y":0.01974, "z":0.00074}
     controlLetters = pd.Series(controlLetters)
 
     mergedLetters = pd.merge(letterPcts.rename("discord_msg_freq"), controlLetters.rename("control_freq"), left_index=True, right_index=True)
@@ -252,21 +247,23 @@ def compareLetterFreq(letterCounts, resultsPath):
     ax.set_xlabel("Control data is from Cryptological Mathematics by Robert Edward Lewand", size=8)
 
     # Save and show
-    savePlot("letter_freq_2", resultsPath)
+    savePlot("letter_freq_2", resultsPath, logger)
     
     # Reset to the default plot size
     plt.rcParams["figure.figsize"] = mpl.rcParamsDefault["figure.figsize"]
 
 hoursDesc = ["12am","1am","2am","3am","4am","5am","6am","7am","8am","9am","10am","11am","12pm","1pm","2pm","3pm","4pm","5pm","6pm","7pm","8pm","9pm","10pm","11pm"]
-def plotMessageTimes(messages, updateLabel, resultsPath):
+def plotMessageTimes(messages, updateLabel, resultsPath, logger):
     # Use those formatted times for plotting
     updateLabel("messages by month")
-    messagesByMonth(messages, resultsPath)
+    messagesByMonth(messages, resultsPath, logger)
     updateLabel("messages by hour")
-    messagesByHour(messages, resultsPath)
+    messagesByHour(messages, resultsPath, logger)
     updateLabel("messages by hour annually")
-    messagesByHourAnnual(messages, resultsPath)
-def messagesByMonth(messages, resultsPath):
+    messagesByHourAnnual(messages, resultsPath, logger)
+def messagesByMonth(messages, resultsPath, logger):
+    logger.info(f"Plotting messages by month")
+
     messagesMonthly = pd.crosstab(messages["Timestamp"].dt.year, messages["Timestamp"].dt.month)
 
     # Add rows for months that never had a message
@@ -293,8 +290,10 @@ def messagesByMonth(messages, resultsPath):
     # Title
     ax.set_title("Messages sent by month", loc="left")
 
-    savePlot("message_months", resultsPath)
-def messagesByHour(messages, resultsPath):
+    savePlot("message_months", resultsPath, logger)
+def messagesByHour(messages, resultsPath, logger):
+    logger.info(f"Plotting messages by hour")
+    
     messagesByHour = messages["Timestamp"].dt.hour.value_counts().sort_index(ascending=False)
     
     # Add rows for months that never had a message
@@ -317,8 +316,9 @@ def messagesByHour(messages, resultsPath):
     ax.set_yticks([])
     ax.set_title(f"Messages sent by hour", loc="left")
 
-    savePlot("messages_clock", resultsPath)
-def messagesByHourAnnual(messages, resultsPath):
+    savePlot("messages_clock", resultsPath, logger)
+def messagesByHourAnnual(messages, resultsPath, logger):
+    logger.info(f"Plotting messages by hour, split into years")
     messageHoursByYear = pd.crosstab(messages["Timestamp"].dt.year, messages["Timestamp"].dt.hour)
     
     # Add rows for months that never had a message
@@ -330,6 +330,7 @@ def messagesByHourAnnual(messages, resultsPath):
     # Create a plot for each year
     yearsUsed = messages["Timestamp"].dt.year.unique()
     for year, yearColor in zip(yearsUsed, yearsPalette):
+        logger.info(f"Plotting messages for year {year}")
         messagesByHour = messageHoursByYear.loc[year]
 
         # Calculate numbers for polar histogram
@@ -349,16 +350,17 @@ def messagesByHourAnnual(messages, resultsPath):
         ax.set_title(f"Messages by hour for {year}", loc="left")
         plt.figtext(0.75,0.9,f"Total Messages:\n{messagesByHour.sum()}")
 
-        savePlot(f"messages_clock_{year}", resultsPath)
+        savePlot(f"messages_clock_{year}", resultsPath, logger)
 
-def plotMessageLengths(messages, updateLabel, resultsPath):
+def plotMessageLengths(messages, updateLabel, resultsPath, logger):
     updateLabel("message lengths by month")
-    messageLengthsByMonth(messages, resultsPath)
+    messageLengthsByMonth(messages, resultsPath, logger)
     updateLabel("message lengths by hour")
-    messageLenthsByHour(messages, resultsPath)
+    messageLenthsByHour(messages, resultsPath, logger)
     updateLabel("message lengths by hour annually")
-    messagesLengthsByHourAnnual(messages, resultsPath)
-def messageLengthsByMonth(messages, resultsPath):
+    messagesLengthsByHourAnnual(messages, resultsPath, logger)
+def messageLengthsByMonth(messages, resultsPath, logger):
+    logger.info(f"Plotting message lengths by month")
     lengthsByMonth = pd.crosstab(messages["Timestamp"].dt.year, messages["Timestamp"].dt.month, values=messages["Contents"].str.len(), aggfunc="mean")
     lengthsByMonth = lengthsByMonth.fillna(0)
 
@@ -386,8 +388,10 @@ def messageLengthsByMonth(messages, resultsPath):
     # Title
     ax.set_title("Messages lengths by month", loc="left")
     
-    savePlot("message_months_lengths", resultsPath)
-def messageLenthsByHour(messages, resultsPath):
+    savePlot("message_months_lengths", resultsPath, logger)
+def messageLenthsByHour(messages, resultsPath, logger):
+    logger.info(f"Plotting message lengths by hour")
+
     messageLengths = pd.concat([messages, messages["Contents"].str.len().rename("message_len")], axis=1)
     lengthsByHour = messageLengths.groupby(messageLengths["Timestamp"].dt.hour)["message_len"].mean()
     
@@ -410,8 +414,9 @@ def messageLenthsByHour(messages, resultsPath):
     ax.set_xticks(theta, lengthsByHour.index, size=10, position=(0,-0.02))
     ax.set_title(f"Message lengths by hour", loc="left")
 
-    savePlot("message_lengths_clock", resultsPath)
-def messagesLengthsByHourAnnual(messages, resultsPath):
+    savePlot("message_lengths_clock", resultsPath, logger)
+def messagesLengthsByHourAnnual(messages, resultsPath, logger):
+    logger.info(f"Plotting messaage lengths by hour, split by year")
     lengthsHourlyByYear = pd.crosstab(messages["Timestamp"].dt.year, messages["Timestamp"].dt.hour, values=messages["Contents"].str.len(), aggfunc="mean")
     lengthsHourlyByYear = lengthsHourlyByYear.fillna(0)
 
@@ -424,6 +429,7 @@ def messagesLengthsByHourAnnual(messages, resultsPath):
     # Create a plot for each year
     yearsUsed = messages["Timestamp"].dt.year.unique()
     for year, yearColor in zip(yearsUsed, yearsPalette):
+        logger.info(f"Plotting message lengths for year {year}")
         lengthsHourlyForYear = lengthsHourlyByYear.loc[year]
 
         # Calculate numbers for polar histogram
@@ -441,12 +447,13 @@ def messagesLengthsByHourAnnual(messages, resultsPath):
         # Title
         ax.set_title(f"Message lengths by hour for {year}", loc="left")
 
-        savePlot(f"message_lengths_clock_{year}", resultsPath)
+        savePlot(f"message_lengths_clock_{year}", resultsPath, logger)
 
-def plotWords(messageTimesSplit, tkWindow, updateLabel, resultsPath):
+def plotWords(messageTimesSplit, tkWindow, updateLabel, resultsPath, logger):
     updateLabel("counting words")
 
     # Split via definition of "word" as any letters and apostrophes, and any dashes that are "sandwiched" between other letters
+    logger.info(f"Splitting messages into words")
     words = messageTimesSplit["Contents"].map(lambda f: re.findall(r"(?:[a-zA-Z']|(?<=[a-zA-Z])-(?=[a-zA-Z]))+", str(f).lower())).explode()
     
     # Count number of words using that reasonable definition
@@ -460,12 +467,13 @@ def plotWords(messageTimesSplit, tkWindow, updateLabel, resultsPath):
     messageWords = pd.merge(words.rename("word"), messageTimesSplit, left_index=True, right_index=True)
     
     # Start visualizing this
-    wordsBasicInfo(mostUsedWords["Count"].sum(), resultsPath)
+    wordsBasicInfo(mostUsedWords["Count"].sum(), resultsPath, logger)
     updateLabel("most used words")
-    wordRankings(words, resultsPath)
+    wordRankings(words, resultsPath, logger)
     updateLabel("word trends")
-    wordTrends(messageWords, tkWindow, resultsPath)
-def wordsBasicInfo(totalWords, resultsPath):
+    wordTrends(messageWords, tkWindow, resultsPath, logger)
+def wordsBasicInfo(totalWords, resultsPath, logger):
+    logger.info(f"Displaying basic info about word count")
     fig, ax = plt.subplots()
     ax.set_axis_off()
 
@@ -496,8 +504,10 @@ def wordsBasicInfo(totalWords, resultsPath):
     info2 = f"Based on the assumption that a non-double-sided page can fit 250 words, a printed copy of your messages would weigh {pounds} pounds."
     ax.text(0, 0.95, f"{info1}\n\n{info2}", horizontalalignment="left", verticalalignment="top", wrap=True)
     
-    savePlot("messages_basic_info", resultsPath)
-def wordRankings(words, resultsPath):
+    savePlot("messages_basic_info", resultsPath, logger)
+def wordRankings(words, resultsPath, logger):
+    logger.info(f"Calculating word rankings")
+
     # Get the rankings and usage count of words
     mostUsedWords = words.value_counts().sort_values(ascending=False)
     mostUsedWords = pd.concat([mostUsedWords.rename("Count"), mostUsedWords.rank(method="min", ascending=False).rename("Rank").astype(int)], axis=1)
@@ -508,11 +518,11 @@ def wordRankings(words, resultsPath):
     txtPath = f"{resultsPath}/most_used_words.txt"
     
     # Save as a txt file
-    output_file = open(txtPath, "w")
-    output_file.write(top500)
-    output_file.close()
-    
-def wordTrends(messageWords, tkWindow, resultsPath):
+    logger.info(f"Writing word rankings to text file")
+    with open(txtPath, "w") as outputFile:
+        outputFile.write(top500)
+def wordTrends(messageWords, tkWindow, resultsPath, logger):
+    logger.info(f"Calculating word frequency trends")
     # Get rid of the index of MessageWords so that it can be crosstabbed
     words = messageWords.reset_index()
 
@@ -534,11 +544,11 @@ def wordTrends(messageWords, tkWindow, resultsPath):
     
     # Create the charts
     for startIndex in range(0, numberOfCharts*25, 25):
+        logger.info(f"Plotting word frequencies (words {startIndex} to {startIndex+25})")
         fig,axs = plt.subplots(5, 5, figsize=(15, 15))
         
         # Create a 5x5 grid of word charts
         i = 0
-        print("Making subplots")
         for row in axs:
             for ax in row:
                 # Create a chart for one word
@@ -571,17 +581,17 @@ def wordTrends(messageWords, tkWindow, resultsPath):
         fig.suptitle(f"Word usages by month (top {startIndex+1} to {startIndex+25})", horizontalalignment="center", size=32)
 
         # Save the charts
-        print("Saving plot")
         fig.tight_layout()
-        savePlot(f"messages_top_{startIndex+25}", resultsPath, 75)
+        savePlot(f"messages_top_{startIndex+25}", resultsPath, logger, 75)
     
     # Remove the progress bar
     chartProgress.grid_forget()
     chartProgressLabel.grid_forget()
 
-def openFileExplorer(processLabel, resultsPath):
+def openFileExplorer(processLabel, resultsPath, logger):
     if (os.name in ['nt', 'ce']):
-        print("Opening file explorer")
+        logger.info(f"Opening file explorer")
         os.startfile(os.path.normpath(resultsPath))
     
+    logger.info(f"Data analysis finished, displaying results path")
     processLabel.config(text=f"Data analysis finished! You can view your results at {resultsPath}.")
